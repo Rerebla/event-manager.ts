@@ -1,0 +1,21 @@
+{
+  "name": "music-channel-manager",
+  "version": "1.0.0",
+  "description": "A discord bot, that times users out when they are not using the music-channel for musicbot commands.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rerebla",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^14.14.37",
+    "@types/node-schedule": "^1.3.1",
+    "discord.js": "^12.5.1",
+    "jshint": "^2.12.0",
+    "node-schedule": "^2.0.0",
+    "nodemon": "^2.0.7",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.2.3"
+  }
+}

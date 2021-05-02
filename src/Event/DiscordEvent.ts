@@ -1,27 +1,29 @@
-import { Message, MessageEmbed, MessageReaction, User } from 'discord.js';
+import { Message, MessageEmbed, MessageReaction, TextChannel, User } from 'discord.js';
 import { scheduleJob } from 'node-schedule';
 import { readFileSync, writeFileSync } from 'fs';
 import { deleteElement, mapJson, mapValues } from '../helper/jsonHelper';
-import { events, setEvents } from '../index';
+import { client, events, setEvents } from '../index';
+import { CONFIG } from '../config';
 export class DiscordEvent {
     public name: string;
     public date: Date;
     category: string;
     participantLimit: number | null;
     public participants: User[];
-    public message: Message;
+    public channel: TextChannel;
+    shouldEdit: boolean;
     isOver: boolean;
-    notes: string;
     author: User;
+    lastOwnMessage: Message;
 
-    constructor(name: string, date: Date, category: string, notes: string, message: Message, author: User, participantLimit?: number, participants?: User[]) {
+    constructor(name: string, date: Date, category: string, channel: TextChannel, author: User, participantLimit: number, shouldEdit: boolean, participants?: User[]) {
         this.name = name;
         this.date = date;
         this.category = category;
         this.participantLimit = participantLimit || 0;
         this.participants = participants || [];
-        this.message = message;
-        this.notes = notes;
+        this.channel = channel;
+        this.shouldEdit = shouldEdit;
         this.author = author;
         this.scheduleEvent(date);
         this.sendMessage();
@@ -34,6 +36,22 @@ export class DiscordEvent {
         this.participants.push(participant);
         this.writeCurrentStatusToJson();
     }
+
+    public pingInitialMember(user: User) {
+        user.send(`
+Hey!
+*Don't worry, I'm not a scam bot, I swear.* **Sourcrouts aggressively**
+For reviews of this bot type !event reviews
+
+You are invited to ${this.name} at ${this.date}
+For more information check <#${this.channel}>
+`).catch(() => {
+            client.users.fetch(CONFIG.ownerId).then((user) => {
+                user.send(`There occured an error at: ${user.username}`);
+            });
+        });
+    }
+
 
 
 
@@ -48,14 +66,14 @@ export class DiscordEvent {
     private scheduleEvent(date: Date) {
 
         scheduleJob(new Date(date.valueOf() - 5 * 60000), async function (event: DiscordEvent) {
-            event.message.channel.send("5 Minutes until Start of: " + event.name);
+            event.channel.send("5 Minutes until Start of: " + event.name);
             event.participants.forEach((user) => {
                 user.send(event.name + "is starting in 5 minutes").catch();
             });
         }.bind(null, this));
 
         scheduleJob(date, async function (event: DiscordEvent) {
-            event.message.channel.send("Event has STARTED: " + event.name);
+            event.channel.send("Event has STARTED: " + event.name + "TRÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖT");
 
             event.participants.forEach((user) => {
                 user.send(event.name + " is starting now").catch();
@@ -82,7 +100,6 @@ export class DiscordEvent {
                 { name: 'How many?', value: this.participantLimit || "Unlimited" },
                 { name: 'Currently entered', value: this.participantsToNames() || "none" },
                 { name: 'Still needed', value: this.participantLimit - this.participants.length },
-                { name: 'Notes', value: this.notes }
             );
         return embed;
     }
@@ -90,17 +107,23 @@ export class DiscordEvent {
         let returnString = "";
         for (let index = 0; index < this.participants.length; index++) {
             const participant = this.participants[index];
-            returnString += returnString ? "," + participant : participant.username;
+            returnString += returnString ? ", " + participant.username : participant.username;
         }
         return returnString;
     }
 
 
     public async sendMessage() {
-        const message = await this.message.channel.send(this.constructEmbed());
-
-        message.react('👍');
-        message.react('👎');
+        let message;
+        if (this.shouldEdit && this.lastOwnMessage) {
+            this.lastOwnMessage.edit(this.constructEmbed());
+            message = this.lastOwnMessage;
+        } else {
+            message = await this.channel.send(this.constructEmbed());
+            message.react('👍');
+            message.react('👎');
+            this.lastOwnMessage = message;
+        }
 
         const filter = (reaction: MessageReaction, user: User) => {
             const isValidEmoji = reaction.emoji.name === '👍' || reaction.emoji.name === '👎';
@@ -127,7 +150,7 @@ export class DiscordEvent {
     private writeCurrentStatusToJson() {
         const rawdata = readFileSync("events.json");
         let json = JSON.parse(rawdata.toString());
-        const values = mapValues(this.date, this.category, this.notes, this.message.id, this.message.channel.id, this.participantLimit, this.participants, this.author);
+        const values = mapValues(this.date, this.category, this.channel.id, this.participantLimit, this.shouldEdit, this.participants, this.author);
         json = mapJson(json, this.name, values);
         const data = JSON.stringify(json, null, 2);
         writeFileSync("events.json", data);
